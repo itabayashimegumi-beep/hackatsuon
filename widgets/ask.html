@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>デジカレくんに質問する</title>
+<style>
+  /* ===== 色の設定（ほかのパーツと同じ） ===== */
+  :root { --main: #c0601a; --text: #2b2b2b; --line: #e8dccd; --bg: #ffffff; --input: #fffaf3; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 12px; background: var(--bg); color: var(--text); font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; font-size: 16px; line-height: 1.6; }
+  .top { display: flex; gap: 14px; align-items: center; }
+  .top svg { width: 64px; height: 64px; flex: 0 0 auto; }
+  .top p { margin: 0; font-size: 14px; }
+  form { display: flex; align-items: stretch; gap: 8px; margin-top: 12px; }
+  input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--input); }
+  input:focus { outline: 2px solid var(--main); outline-offset: 1px; }
+  button { flex: 0 0 auto; white-space: nowrap; font: inherit; font-size: 13px; line-height: 1.35; font-weight: 700; color: #fff; background: var(--main); border: none; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  /* スマホでは「デジカレくんに／質問する」の2行、広い画面では1行 */
+  @media (min-width: 560px) { button { font-size: 14px; padding: 10px 16px; } .sp { display: none; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <svg viewBox="0 0 100 100" aria-hidden="true">
+    <line x1="50" y1="22" x2="50" y2="8" stroke="#6b4a3a" stroke-width="3" stroke-linecap="round"/><circle cx="50" cy="8" r="6" fill="#9e2a2f"/>
+    <rect x="8" y="42" width="10" height="22" rx="5" fill="#9e2a2f"/><rect x="82" y="42" width="10" height="22" rx="5" fill="#9e2a2f"/>
+    <rect x="14" y="22" width="72" height="62" rx="24" fill="#f1be59"/><rect x="24" y="34" width="52" height="36" rx="16" fill="#fffaf3"/>
+    <ellipse cx="40" cy="50" rx="5" ry="6.5" fill="#3a2a22"/><ellipse cx="60" cy="50" rx="5" ry="6.5" fill="#3a2a22"/>
+    <circle cx="32" cy="60" r="4" fill="#f4a3a0" opacity=".8"/><circle cx="68" cy="60" r="4" fill="#f4a3a0" opacity=".8"/>
+    <path d="M44 61 Q50 66 56 61" fill="none" stroke="#3a2a22" stroke-width="2.5" stroke-linecap="round"/>
+  </svg>
+  <p><b>デジカレくん</b>に聞いてみてね。託児・日程・Udemyのことなど、24時間答えるよ。</p>
+</div>
+<form id="ask" target="_blank">
+  <input name="q" type="text" placeholder="例：託児について" required autocomplete="off" aria-label="デジカレくんへの質問">
+  <button type="submit">デジカレくんに<br class="sp">質問する</button>
+</form>
+<script>
+// ===== 設定 =====
+// デジカレくん（Apps Script）のウェブアプリのURL（…/exec）を貼ってください。
+// 書いた質問は ?q=質問 としてデジカレくんの画面に渡され、開いたときにそのまま送られます。
+const WEBAPP_URL = "";
+document.getElementById("ask").action = WEBAPP_URL || "../chatbot/index.html";
+</script>
+</body>
+</html>

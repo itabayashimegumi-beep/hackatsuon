@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>お知らせ一覧</title>
+<style>
+  /* ===== 色の設定（ここを変えると全体の色が変わります） ===== */
+  :root {
+    --main: #c0601a;        /* メインの色（オレンジ） */
+    --main-soft: #fdf1e3;
+    --accent: #9e2a2f;      /* NEW・締切が近いときの色（赤） */
+    --accent-soft: #fbeee6;
+    --text: #2b2b2b;
+    --muted: #6b6b6b;
+    --line: #e2e2e2;
+    --bg: #ffffff;
+    --card: #fafafa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 12px;
+    background: var(--bg); color: var(--text);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
+    font-size: 16px; line-height: 1.6;
+  }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .tabs button {
+    font: inherit; font-size: 14px; cursor: pointer;
+    padding: 6px 14px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  }
+  .tabs button[aria-pressed="true"] { background: var(--main); border-color: var(--main); color: #fff; }
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .item {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .item.closed { opacity: .6; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .badge { font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 4px; background: var(--main-soft); color: var(--main); }
+  .badge.new { background: var(--accent); color: #fff; }
+  .deadline { font-size: 13px; font-weight: 700; color: var(--main); }
+  .deadline.soon { color: var(--accent); }
+  .deadline.over { color: var(--muted); font-weight: 400; }
+  .title { font-size: 17px; font-weight: 700; margin: 4px 0 2px; }
+  .body { white-space: pre-wrap; margin: 0; font-size: 15px; }
+  .link {
+    display: inline-block; margin-top: 8px; padding: 8px 16px; border-radius: 8px;
+    background: var(--main); color: #fff; text-decoration: none; font-weight: 700; font-size: 15px;
+  }
+  .item.soon-box { border-color: var(--accent); background: var(--accent-soft); }
+  .message { color: var(--muted); padding: 16px 4px; }
+</style>
+</head>
+<body>
+<div class="tabs" id="tabs" role="group" aria-label="種類で絞り込む"></div>
+<div class="list" id="list"><p class="message">読み込み中…</p></div>
+
+<script>
+// ===== 設定 =====
+// スプレッドシートの「お知らせ」シートを「ウェブに公開（CSV）」したURLを貼ってください。
+// 空のままだと、見本のデータで表示されます。
+const CSV_URL = "";
+const NEW_DAYS = 7;   // 掲載から何日間「NEW」を付けるか
+const SOON_DAYS = 3;  // 締切まで何日以内なら目立たせるか
+const HIDE_CLOSED_AFTER_DAYS = 14; // 締切から何日たったら一覧から消すか
+// どの「種類」を出すか（同じお知らせシートを、ページごとに出し分けます）
+//   ホーム用：      ONLY_TYPE = ""         HIDE_TYPES = ["資格取得"]
+//   資格取得ページ用：ONLY_TYPE = "資格取得"  HIDE_TYPES = []
+const ONLY_TYPE = "";             // この種類だけ出す（空なら全部）
+const HIDE_TYPES = ["資格取得"];  // この種類は出さない
+
+// 見本の日付は「今日」を基準に作っています（d(-2) = 2日前）
+const d = n => { const x = new Date(); x.setDate(x.getDate() + n); return `${x.getFullYear()}/${x.getMonth() + 1}/${x.getDate()}`; };
+const SAMPLE_CSV = `掲載日,種類,タイトル,内容,リンク,リンクの文字,締切,表示
+${d(-10)},申し込み,パソコン貸出の申し込み,"パソコンの貸し出しを希望する方は、こちらから申し込んでください。
+（台数に限りがあります）",https://forms.google.com/,貸出を申し込む,${d(-3)},
+${d(-1)},申し込み,連絡ツール「Slack」への参加,"講座の連絡にSlackを使います。
+こちらから参加してください。",https://slack.com/,参加する,${d(3)},
+${d(-1)},宿題,対面講座②までの課題,Udemy Businessの「広報基礎」の動画を見て、気づいたことを3つ書いてきてください。,https://docs.google.com/,課題の説明を見る,${d(6)},
+${d(-4)},連絡,欠席するときは,対面講座を欠席する場合は、前日までにフォームで連絡してください。,https://forms.google.com/,欠席連絡フォーム,,
+${d(-5)},申し込み,ライフキャリア相談の予約,キャリアの相談員に、これからの働き方を個別に相談できます。,https://forms.google.com/,相談を予約する,,
+${d(-1)},連絡,（非表示の例）下書き,この行は表示されません。,,,,非表示
+${d(-2)},資格取得,受験の申し込み（仮）,"資格の受験を希望する方は、こちらから申し込んでください。
+試験の日程は決まりしだいお知らせします。",https://forms.google.com/,受験を申し込む,${d(10)},
+${d(-6)},資格取得,資格取得の説明会（仮）,資格取得の進め方を説明します。日時は決まりしだいお知らせします。,,,,`;
+
+// ===== ここから下は通常さわらなくて大丈夫です =====
+function parseCSV(text) {
+  const rows = []; let row = []; let field = ""; let q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+      else field += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); rows.push(row); row = []; field = "";
+    } else field += c;
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  const head = (rows.shift() || []).map(h => h.trim());
+  return rows
+    .filter(r => r.some(v => v.trim() !== ""))
+    .map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] || "").trim()])));
+}
+
+function parseDate(s) {
+  const m = (s || "").match(/(\d{4})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+}
+const WEEK = "日月火水木金土";
+const fmt = d => `${d.getMonth() + 1}/${d.getDate()}(${WEEK[d.getDay()]})`;
+const daysFromToday = d => {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  return Math.round((d - t) / 86400000);
+};
+const esc = s => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const isHidden = v => /^(非表示|いいえ|no|false|×)$/i.test(v || "");
+
+let items = [];
+let current = "すべて";
+
+function render() {
+  const list = document.getElementById("list");
+  const shown = items.filter(it => current === "すべて" || it.type === current);
+  if (!shown.length) { list.innerHTML = '<p class="message">いまはお知らせはありません。</p>'; return; }
+  list.innerHTML = shown.map(it => {
+    let dl = "";
+    if (it.deadline) {
+      const n = daysFromToday(it.deadline);
+      if (n < 0) dl = `<span class="deadline over">受付終了（${fmt(it.deadline)}締切）</span>`;
+      else if (n === 0) dl = `<span class="deadline soon">今日が締切</span>`;
+      else if (n <= SOON_DAYS) dl = `<span class="deadline soon">締切 ${fmt(it.deadline)}・あと${n}日</span>`;
+      else dl = `<span class="deadline">締切 ${fmt(it.deadline)}</span>`;
+    }
+    const link = it.link && !it.closed
+      ? `<a class="link" href="${esc(it.link)}" target="_blank" rel="noopener">${esc(it.linkText || "開く")}</a>` : "";
+    return `<article class="item${it.closed ? " closed" : ""}${it.soon ? " soon-box" : ""}">
+      <div class="meta">
+        ${it.isNew ? '<span class="badge new">NEW</span>' : ""}
+        ${it.type ? `<span class="badge">${esc(it.type)}</span>` : ""}
+        ${it.posted ? `<span>${fmt(it.posted)}</span>` : ""}
+        ${dl}
+      </div>
+      <div class="title">${esc(it.title)}</div>
+      ${it.body ? `<p class="body">${esc(it.body)}</p>` : ""}
+      ${link}
+    </article>`;
+  }).join("");
+}
+
+function renderTabs() {
+  if (ONLY_TYPE) { document.getElementById("tabs").hidden = true; return; } // 1種類だけなら絞り込みボタンは不要
+  const types = ["すべて", ...new Set(items.map(it => it.type).filter(Boolean))];
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = types.map(t => `<button type="button" aria-pressed="${t === current}">${esc(t)}</button>`).join("");
+  tabs.querySelectorAll("button").forEach((b, i) => b.onclick = () => { current = types[i]; renderTabs(); render(); });
+}
+
+async function load() {
+  try {
+    const text = CSV_URL
+      ? await fetch(CSV_URL + (CSV_URL.includes("?") ? "&" : "?") + "t=" + Date.now()).then(r => {
+          if (!r.ok) throw new Error(r.status); return r.text();
+        })
+      : SAMPLE_CSV;
+    items = parseCSV(text)
+      .filter(r => r["タイトル"] && !isHidden(r["表示"]))
+      .filter(r => (!ONLY_TYPE || r["種類"] === ONLY_TYPE) && !HIDE_TYPES.includes(r["種類"]))
+      .map(r => {
+        const posted = parseDate(r["掲載日"]);
+        const deadline = parseDate(r["締切"]);
+        const left = deadline ? daysFromToday(deadline) : null;
+        return {
+          posted, deadline,
+          type: r["種類"], title: r["タイトル"], body: r["内容"],
+          link: /^https?:\/\//.test(r["リンク"]) ? r["リンク"] : "",
+          linkText: r["リンクの文字"],
+          isNew: posted && daysFromToday(posted) > -NEW_DAYS && daysFromToday(posted) <= 0,
+          closed: left !== null && left < 0,
+          soon: left !== null && left >= 0 && left <= SOON_DAYS,
+        };
+      })
+      .filter(it => !(it.closed && daysFromToday(it.deadline) < -HIDE_CLOSED_AFTER_DAYS))
+      .filter(it => !it.posted || daysFromToday(it.posted) <= 0) // 掲載日が未来のものは、その日になるまで出さない
+      // 並び順：締切が近いもの → 新しいお知らせ → 受付終了
+      .sort((a, b) => (a.closed - b.closed) || (b.soon - a.soon)
+        || (a.soon && b.soon ? a.deadline - b.deadline : 0)
+        || ((b.posted || 0) - (a.posted || 0)));
+    renderTabs(); render();
+  } catch (e) {
+    document.getElementById("list").innerHTML =
+      '<p class="message">お知らせを読み込めませんでした。時間をおいて、ページを再読み込みしてください。</p>';
+  }
+}
+load();
+</script>
+</body>
+</html>

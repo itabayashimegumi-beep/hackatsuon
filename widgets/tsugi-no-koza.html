@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>次の講座</title>
+<style>
+  /* ===== 色の設定（ここを変えると全体の色が変わります） ===== */
+  :root {
+    --main: #c0601a;
+    --main-soft: #fdf1e3;
+    --accent: #9e2a2f;
+    --text: #2b2b2b;
+    --muted: #6b6b6b;
+    --line: #e2e2e2;
+    --bg: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 12px;
+    background: var(--bg); color: var(--text);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
+    font-size: 16px; line-height: 1.6;
+  }
+  .next {
+    background: var(--main-soft); border: 2px solid var(--main); border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .label { font-size: 14px; font-weight: 700; color: var(--main); }
+  .count { float: right; font-size: 14px; font-weight: 700; color: #fff; background: var(--main); padding: 2px 10px; border-radius: 999px; }
+  .count.today { background: var(--accent); }
+  .date { font-size: 24px; font-weight: 700; margin: 4px 0 0; }
+  .name { font-size: 18px; font-weight: 700; margin: 2px 0 6px; }
+  .rows { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 15px; }
+  .rows dt { color: var(--muted); }
+  .rows dd { margin: 0; white-space: pre-wrap; }
+  /* 全回の日程（小さめの一覧） */
+  .all { margin-top: 14px; }
+  .all h3 { font-size: 14px; margin: 0 0 4px; color: var(--muted); font-weight: 700; }
+  .all h3 small { font-weight: 400; }
+  .all ul { list-style: none; margin: 0; padding: 0; }
+  .all li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; padding: 6px 4px; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 1.5; }
+  .all .no { flex: 0 0 1.4em; font-weight: 700; color: var(--main); }
+  .all .d { flex: 0 0 auto; min-width: 5.6em; font-weight: 700; }
+  .all .tm { flex: 0 0 auto; color: var(--muted); font-size: 13px; }
+  .all .nm { flex: 1 1 10em; }
+  .all .mark { font-size: 11px; font-weight: 700; color: #fff; background: var(--main); border-radius: 4px; padding: 0 6px; margin-left: 4px; white-space: nowrap; }
+  .all li.now { background: var(--main-soft); }
+  .all li.past, .all li.past .no { color: #a0a0a0; }
+  .all li.past .tm { color: #b0b0b0; }
+  .message { color: var(--muted); padding: 16px 4px; }
+</style>
+</head>
+<body>
+<div id="app"><p class="message">読み込み中…</p></div>
+
+<script>
+// ===== 設定 =====
+// スプレッドシートの「講座日程」シートを「ウェブに公開（CSV）」したURLを貼ってください。
+// 空のままだと、見本のデータで表示されます。
+const CSV_URL = "";
+
+// 見本は第5期のチラシの日程です（持ち物は決まったら書き足してください）
+const SAMPLE_CSV = `日付,開始,終了,講座名,場所,持ち物,メモ
+2026/11/01,10:00,13:00,対面講座① オリエンテーション／ランチ交流,新月公民館,,9:40～ 託児・受付開始となります
+2026/12/13,10:00,15:00,対面講座② 実践ワークショップ／ランチ交流,新月公民館,,託児あり（無料・要事前申込）
+2027/01/17,10:00,12:30,対面講座③ 実践ワークショップ,新月公民館,,託児あり（無料・要事前申込）
+2027/02/07,10:00,12:30,対面講座④ 卒業プロジェクト・キックオフ,新月公民館,,託児あり（無料・要事前申込）
+2027/02/28,10:00,13:00,対面講座⑤ 発表会／修了式／ランチ交流,新月公民館,,託児あり（無料・要事前申込）`;
+
+// ===== ここから下は通常さわらなくて大丈夫です =====
+function parseCSV(text) {
+  const rows = []; let row = []; let field = ""; let q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+      else field += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); rows.push(row); row = []; field = "";
+    } else field += c;
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  const head = (rows.shift() || []).map(h => h.trim());
+  return rows
+    .filter(r => r.some(v => v.trim() !== ""))
+    .map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] || "").trim()])));
+}
+
+function parseDate(s) {
+  const m = (s || "").match(/(\d{4})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+}
+const WEEK = "日月火水木金土";
+const fmt = d => `${d.getMonth() + 1}/${d.getDate()}(${WEEK[d.getDay()]})`;
+const daysFromToday = d => {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  return Math.round((d - t) / 86400000);
+};
+const esc = s => (s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const time = c => c.start ? `${c.start}${c.end ? "〜" + c.end : "〜"}` : "";
+
+let classes = [];
+
+function render() {
+  const app = document.getElementById("app");
+  if (!classes.length) { app.innerHTML = '<p class="message">講座の日程はまだ登録されていません。</p>'; return; }
+  const upcoming = classes.filter(c => daysFromToday(c.date) >= 0);
+  const next = upcoming[0];
+
+  let html = "";
+  if (next) {
+    const n = daysFromToday(next.date);
+    html += `<section class="next">
+      <span class="count${n === 0 ? " today" : ""}">${n === 0 ? "今日です" : `あと${n}日`}</span>
+      <div class="label">次の講座</div>
+      <p class="date">${fmt(next.date)} ${esc(time(next))}</p>
+      <p class="name">${esc(next.name)}</p>
+      <dl class="rows">
+        ${next.bring ? `<dt>持ち物</dt><dd>${esc(next.bring)}</dd>` : ""}
+        ${next.memo ? `<dt>メモ</dt><dd>${esc(next.memo)}</dd>` : ""}
+      </dl>
+    </section>`;
+  } else {
+    html += '<p class="message">第5期の講座はすべて終了しました。ご参加ありがとうございました。</p>';
+  }
+
+  // 全回の日程を小さく一覧で出す（終わった回は薄く、次の回に目印）
+  const places = [...new Set(classes.map(c => c.place).filter(Boolean))];
+  const samePlace = places.length === 1 && classes.every(c => c.place);
+  const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
+  const row = (c, i) => {
+    // 講座名が「対面講座① ○○」なら番号と名前に分ける（番号が二重にならないように）
+    const m = c.name.match(/^対面講座\s*([①-⑳])\s*(.*)$/);
+    const no = m ? m[1] : (CIRCLED[i] || i + 1);
+    const nm = m ? (m[2] || c.name) : c.name;
+    const cls = c === next ? "now" : daysFromToday(c.date) < 0 ? "past" : "";
+    return `<li class="${cls}"><span class="no">${esc(String(no))}</span><span class="d">${fmt(c.date)}</span>`
+      + `<span class="tm">${esc(time(c))}</span>`
+      + `<span class="nm">${esc(nm)}${c === next ? '<span class="mark">次の回</span>' : ""}${!samePlace && c.place ? `<small>（${esc(c.place)}）</small>` : ""}</span></li>`;
+  };
+  html += `<section class="all"><h3>全${classes.length}回の日程${samePlace ? ` <small>（会場はすべて${esc(places[0])}）</small>` : ""}</h3>`
+    + `<ul>${classes.map(row).join("")}</ul></section>`;
+  app.innerHTML = html;
+}
+
+async function load() {
+  try {
+    const text = CSV_URL
+      ? await fetch(CSV_URL + (CSV_URL.includes("?") ? "&" : "?") + "t=" + Date.now()).then(r => {
+          if (!r.ok) throw new Error(r.status); return r.text();
+        })
+      : SAMPLE_CSV;
+    classes = parseCSV(text)
+      .map(r => ({
+        date: parseDate(r["日付"]), start: r["開始"], end: r["終了"],
+        name: r["講座名"], place: r["場所"], bring: r["持ち物"], memo: r["メモ"],
+      }))
+      .filter(c => c.date && c.name)
+      .sort((a, b) => a.date - b.date);
+    render();
+  } catch (e) {
+    document.getElementById("app").innerHTML =
+      '<p class="message">講座の日程を読み込めませんでした。時間をおいて、ページを再読み込みしてください。</p>';
+  }
+}
+load();
+</script>
+</body>
+</html>

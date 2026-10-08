@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>デジカレ質問ロボット</title>
+<style>
+  /* ===== 色の設定（お知らせパーツと同じ） ===== */
+  :root {
+    --main: #c0601a;        /* オレンジ */
+    --main-soft: #fdf1e3;
+    --accent: #9e2a2f;      /* 赤 */
+    --text: #2b2b2b;
+    --muted: #6b6b6b;
+    --line: #e8dccd;
+    --bg: #fffaf3;
+    --bubble-bot: #ffffff;
+    --bubble-me: #c0601a;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
+    font-size: 16px; line-height: 1.6;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; background: var(--main-soft); border-bottom: 1px solid var(--line);
+  }
+  header .name { font-weight: 700; font-size: 17px; }
+  header .sub { font-size: 12px; color: var(--muted); }
+  .robot { width: 56px; height: 56px; flex: 0 0 auto; }
+  .robot.small { width: 36px; height: 36px; }
+  .robot .eye { animation: blink 4s infinite; transform-origin: center; transform-box: fill-box; }
+  .robot .antenna { animation: bob 2.4s ease-in-out infinite; transform-origin: bottom; transform-box: fill-box; }
+  @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+  @keyframes bob { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+
+  #log { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row.me { justify-content: flex-end; }
+  .row > div { max-width: 80%; }
+  .me > div { text-align: right; }
+  .bubble {
+    display: inline-block; text-align: left; padding: 9px 13px; border-radius: 16px; white-space: pre-wrap; word-break: break-word;
+    box-shadow: 0 1px 2px rgba(0,0,0,.06);
+  }
+  .bot .bubble { background: var(--bubble-bot); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .me .bubble { background: var(--bubble-me); color: #fff; border-bottom-right-radius: 4px; }
+  .bubble a { color: var(--main); font-weight: 700; }
+  .line-btn {
+    display: block; margin-top: 8px; padding: 7px 12px; border-radius: 8px; text-align: center;
+    background: #06c755; color: #fff !important; text-decoration: none; font-weight: 700; white-space: normal;
+  }
+  .note { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .typing span { display: inline-block; width: 6px; height: 6px; margin: 0 2px; border-radius: 50%; background: var(--muted); animation: dot 1s infinite; }
+  .typing span:nth-child(2) { animation-delay: .15s; } .typing span:nth-child(3) { animation-delay: .3s; }
+  @keyframes dot { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+
+  #chips { display: flex; gap: 6px; overflow-x: auto; padding: 8px 14px 0; scrollbar-width: none; }
+  /* ボタンが右に続くときは、右はしを薄くして「横にスライドできる」ことを伝える */
+  #chips.more { -webkit-mask-image: linear-gradient(to right, #000 80%, transparent); mask-image: linear-gradient(to right, #000 80%, transparent); }
+  #chips button {
+    flex: 0 0 auto; font: inherit; font-size: 14px; cursor: pointer;
+    padding: 5px 12px; border-radius: 999px; border: 1px solid var(--main); background: #fff; color: var(--main);
+  }
+  form { display: flex; gap: 8px; padding: 10px 14px 14px; }
+  #q {
+    flex: 1; font: inherit; padding: 10px 14px; border-radius: 999px; border: 1px solid var(--line); background: #fff;
+    min-width: 0;
+  }
+  #q:focus { outline: 2px solid var(--main); outline-offset: 1px; }
+  form button {
+    font: inherit; font-weight: 700; padding: 0 18px; border: none; border-radius: 999px;
+    background: var(--main); color: #fff; cursor: pointer;
+  }
+  form button:disabled { opacity: .5; cursor: default; }
+</style>
+</head>
+<body>
+
+<!-- ロボットの絵（チラシの色） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="robot" viewBox="0 0 100 100">
+    <g class="antenna"><line x1="50" y1="22" x2="50" y2="8" stroke="#6b4a3a" stroke-width="3" stroke-linecap="round"/><circle cx="50" cy="8" r="6" fill="#9e2a2f"/></g>
+    <rect x="8" y="42" width="10" height="22" rx="5" fill="#9e2a2f"/>
+    <rect x="82" y="42" width="10" height="22" rx="5" fill="#9e2a2f"/>
+    <rect x="14" y="22" width="72" height="62" rx="24" fill="#f1be59"/>
+    <rect x="24" y="34" width="52" height="36" rx="16" fill="#fffaf3"/>
+    <ellipse class="eye" cx="40" cy="50" rx="5" ry="6.5" fill="#3a2a22"/>
+    <ellipse class="eye" cx="60" cy="50" rx="5" ry="6.5" fill="#3a2a22"/>
+    <circle cx="32" cy="60" r="4" fill="#f4a3a0" opacity=".8"/>
+    <circle cx="68" cy="60" r="4" fill="#f4a3a0" opacity=".8"/>
+    <path d="M44 61 Q50 66 56 61" fill="none" stroke="#3a2a22" stroke-width="2.5" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<header>
+  <svg class="robot" role="img" aria-label="ロボット"><use href="#robot"/></svg>
+  <div>
+    <div class="name" id="botName"></div>
+    <div class="sub">デジカレ第5期のことなら、なんでも聞いてね</div>
+  </div>
+</header>
+
+<div id="log" aria-live="polite"></div>
+<div id="chips"></div>
+<form id="form">
+  <input id="q" type="text" placeholder="質問を入力してね" autocomplete="off" aria-label="質問">
+  <button type="submit">送る</button>
+</form>
+
+<script>
+// ===== 設定 =====
+const BOT_NAME = "デジカレくん";  // ロボットの名前（あとで変えられます）
+const QUICK = ["託児について", "講座の日程", "会場はどこ？", "Udemyがうまく動かない", "スクショの撮り方", "パソコンを借りたい", "問い合わせ先"];
+
+// ===== 答えを聞く =====
+// スプレッドシートの Apps Script（Code.gs の ask）に質問を送り、答えを受け取ります。
+function ask(text) {
+  return new Promise((resolve, reject) => {
+    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).ask(text);
+  });
+}
+
+// ===== 画面 =====
+const log = document.getElementById("log");
+const esc = s => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Googleサイトの枠の中から開くので、リンクは新しいタブで開く
+const linkify = s => esc(s)
+  .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+  .replace(/([\w.+-]+@[\w-]+\.[\w.]+)/g, '<a href="mailto:$1" target="_blank">$1</a>');
+
+function add(who, text, note, lineUrl) {
+  const row = document.createElement("div");
+  row.className = "row " + who;
+  const lineBtn = /^https:\/\//.test(lineUrl || "")
+    ? `<a class="line-btn" href="${esc(lineUrl)}" target="_blank" rel="noopener">LINEで事務局に連絡する</a>` : "";
+  row.innerHTML = (who === "bot" ? '<svg class="robot small" aria-hidden="true"><use href="#robot"/></svg>' : "")
+    + `<div><div class="bubble">${who === "bot" ? linkify(text) : esc(text)}${lineBtn}</div>${note ? `<div class="note">${esc(note)}</div>` : ""}</div>`;
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+  return row;
+}
+
+let busy = false; // 答えている途中は次の質問を受け付けない（順番が入れ違わないように）
+
+async function send(text) {
+  text = text.trim();
+  if (!text || busy) return;
+  busy = true;
+  const input = document.getElementById("q"), btn = document.querySelector("form button");
+  input.value = ""; btn.disabled = true;
+  add("me", text);
+  const typing = add("bot", "");
+  typing.querySelector(".bubble").innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+  try {
+    const res = await ask(text);
+    typing.remove();
+    add("bot", res.answer, res.logged ? "この質問は事務局への質問リストに記録されました" : "", res.lineUrl);
+  } catch (e) {
+    typing.remove();
+    add("bot", "ごめんね、うまくつながらなかったみたい。少し待ってから、もう一度送ってね。");
+  }
+  busy = false; btn.disabled = false; input.focus();
+}
+
+document.getElementById("botName").textContent = BOT_NAME;
+document.getElementById("chips").innerHTML = QUICK.map(q => `<button type="button">${esc(q)}</button>`).join("");
+const chips = document.getElementById("chips");
+const markMore = () => chips.classList.toggle("more", chips.scrollLeft + chips.clientWidth < chips.scrollWidth - 4);
+chips.addEventListener("scroll", markMore);
+window.addEventListener("resize", markMore);
+markMore();
+document.querySelectorAll("#chips button").forEach(b => b.onclick = () => send(b.textContent));
+document.getElementById("form").onsubmit = e => { e.preventDefault(); send(document.getElementById("q").value); };
+
+add("bot", `こんにちは！${BOT_NAME}だよ。\nデジカレ第5期のことで、わからないことがあったら聞いてね。\n\n※ 名前や連絡先など、個人的なことは書かないでね。`);
+
+// サイトの質問欄から開かれたとき（ウェブアプリのURLの ?q=質問）は、その質問をそのまま送る
+google.script.url.getLocation(loc => {
+  const q = loc.parameter && loc.parameter.q;
+  if (q) send(String(q));
+});
+</script>
+</body>
+</html>

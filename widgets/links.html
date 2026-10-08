@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>リンク集</title>
+<style>
+  /* ===== 色の設定（お知らせパーツと同じ） ===== */
+  :root {
+    --main: #c0601a;        /* メインの色（オレンジ） */
+    --main-soft: #fdf1e3;
+    --text: #2b2b2b;
+    --muted: #6b6b6b;
+    --line: #e2e2e2;
+    --bg: #ffffff;
+    --off: #f4f4f4;         /* 準備中のボタンの色 */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 12px;
+    background: var(--bg); color: var(--text);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
+    font-size: 16px; line-height: 1.6;
+  }
+  h2 { font-size: 18px; margin: 20px 0 4px; padding-left: 10px; border-left: 5px solid var(--main); }
+  h2:first-child { margin-top: 0; }
+  h3 { font-size: 15px; margin: 14px 0 8px; color: var(--main); }
+  .grid { display: grid; grid-template-columns: 1fr; grid-auto-rows: 1fr; gap: 8px; } /* 同じグループの箱は同じ高さ */
+  @media (min-width: 560px) { .grid { grid-template-columns: 1fr 1fr; } }
+  .btn {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    min-height: 56px; padding: 10px 14px; border-radius: 10px;
+    background: #fff; border: 1px solid var(--line); color: var(--text); text-decoration: none;
+  }
+  a.btn:hover, a.btn:focus-visible { border-color: var(--main); background: var(--main-soft); outline: none; }
+  .btn .t { display: block; font-weight: 700; font-size: 15px; }
+  .btn .s { display: block; font-size: 13px; color: var(--muted); }
+  .btn .go { flex: 0 0 auto; color: var(--main); font-weight: 700; font-size: 18px; }
+  .btn.off { background: var(--off); border-style: dashed; color: var(--muted); cursor: not-allowed; }
+  .btn.off .t { font-weight: 400; }
+  .btn .act { flex: 0 0 auto; font-size: 14px; font-weight: 700; color: #fff; background: var(--main); border-radius: 8px; padding: 6px 14px; white-space: nowrap; }
+  .btn .soon { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--muted); border: 1px solid #c8c8c8; border-radius: 999px; padding: 1px 10px; background: #fff; }
+  .message { color: var(--muted); padding: 16px 4px; }
+</style>
+</head>
+<body>
+<div id="app"><p class="message">読み込み中…</p></div>
+
+<script>
+// ===== 設定 =====
+// スプレッドシートの「リンク集」シートを「ウェブに公開（CSV）」したURLを貼ってください。
+// 空のままだと、見本のデータで表示されます。
+const CSV_URL = "";
+
+// 見本（事務局のリンク集シートの内容）
+const SAMPLE_CSV = `表示順,区分,グループ,タイトル,補足,リンク,表示,メモ,ボタンの文字
+20,講座期間中,講座の基本,学習場所,Wi-Fi、充電が可能,,TRUE,アスナロウ荘・スクエアシップ・Omusubi。リンクにはGoogleサイトの「学習場所」ページのURLを入れる
+25,講座期間中,講座の基本,託児,2施設を無料で利用（事前予約が必要）,,TRUE,リンクにはGoogleサイトの「託児」ページのURLを入れる
+30,講座期間中,講座の基本,カリキュラム,オンライン学習の内容（PDF）,,TRUE,ドライブのPDFのリンクを入れる
+40,講座期間中,講座の基本,学習DAY,Slackの使い方／11/8(日) 20:00〜,,TRUE,例として入れた内容。Zoomのリンクを入れると「参加する」が押せる,参加する
+50,講座期間中,個別フォローアップ,個別フォローアップ①,第1回対面講座（11/1）のあと1か月以内,,TRUE,申し込み方法を確認
+60,講座期間中,個別フォローアップ,個別フォローアップ②,第3回対面講座（1/17）のあと,,TRUE,期間・申し込み方法を確認
+110,講座期間中,対面講座①,写真,,,FALSE,
+120,講座期間中,対面講座①,当日のテキスト,,,FALSE,
+130,講座期間中,対面講座①,YouTubeアーカイブ,,,FALSE,
+210,講座期間中,対面講座②,写真,,,FALSE,
+220,講座期間中,対面講座②,当日のテキスト,,,FALSE,
+230,講座期間中,対面講座②,YouTubeアーカイブ,,,FALSE,
+310,講座期間中,対面講座③,写真,,,FALSE,
+320,講座期間中,対面講座③,当日のテキスト,,,FALSE,
+330,講座期間中,対面講座③,YouTubeアーカイブ,,,FALSE,
+410,講座期間中,対面講座④,写真,,,FALSE,
+420,講座期間中,対面講座④,当日のテキスト,,,FALSE,
+430,講座期間中,対面講座④,YouTubeアーカイブ,,,FALSE,
+510,講座期間中,対面講座⑤,写真,,,FALSE,
+520,講座期間中,対面講座⑤,当日のテキスト,,,FALSE,
+530,講座期間中,対面講座⑤,YouTubeアーカイブ,,,FALSE,
+900,修了後,ライフキャリア相談,ライフキャリア相談,修了生かつ希望者が対象,,TRUE,期間と申し込み方法を確認`;
+
+// ===== ここから下は通常さわらなくて大丈夫です =====
+function parseCSV(text) {
+  const rows = []; let row = []; let field = ""; let q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+      else field += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); rows.push(row); row = []; field = "";
+    } else field += c;
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  const head = (rows.shift() || []).map(h => h.trim());
+  return rows
+    .filter(r => r.some(v => v.trim() !== ""))
+    .map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] || "").trim()])));
+}
+
+const esc = s => (s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// チェックボックスはCSVで TRUE になる。手で書いた「はい」「○」も表示にする
+const isOn = v => /^(true|はい|○|◯|表示)$/i.test(v || "");
+
+function render(items) {
+  const app = document.getElementById("app");
+  if (!items.length) { app.innerHTML = '<p class="message">いまは表示するリンクがありません。</p>'; return; }
+  let html = "", section = null, group = null;
+  for (const it of items) {
+    if (it.section !== section) {
+      if (group !== null) html += "</div>";
+      html += `<h2>${esc(it.section)}</h2>`;
+      section = it.section; group = null;
+    }
+    if (it.group !== group) {
+      if (group !== null) html += "</div>";
+      html += `<h3>${esc(it.group)}</h3><div class="grid">`;
+      group = it.group;
+    }
+    const text = `<span><span class="t">${esc(it.title)}</span>${it.note ? `<span class="s">${esc(it.note)}</span>` : ""}</span>`;
+    html += it.link
+      ? `<a class="btn" href="${esc(it.link)}" target="_blank" rel="noopener">${text}${it.button
+          ? `<span class="act">${esc(it.button)}</span>` : '<span class="go" aria-hidden="true">›</span>'}</a>`
+      : `<div class="btn off" aria-disabled="true">${text}<span class="soon">準備中</span></div>`;
+  }
+  if (group !== null) html += "</div>";
+  app.innerHTML = html;
+}
+
+function buildItems(text) {
+  return parseCSV(text)
+    .map((r, i) => ({
+      order: r["表示順"] === "" ? NaN : Number(r["表示順"]), row: i, on: isOn(r["表示"]),
+      section: r["区分"] || "", group: r["グループ"] || "",
+      title: r["タイトル"], note: r["補足"], button: r["ボタンの文字"] || "",
+      link: /^https?:\/\//.test(r["リンク"]) ? r["リンク"] : "", // http(s) 以外は「準備中」扱い
+    }))
+    .filter(it => it.title && it.on)
+    // 表示順の小さい順。表示順が空や数字でない行は最後に、シートの順のまま
+    .sort((a, b) => (isNaN(a.order) - isNaN(b.order)) || (a.order - b.order) || (a.row - b.row));
+}
+
+async function load() {
+  try {
+    const text = CSV_URL
+      ? await fetch(CSV_URL + (CSV_URL.includes("?") ? "&" : "?") + "t=" + Date.now()).then(r => {
+          if (!r.ok) throw new Error(r.status); return r.text();
+        })
+      : SAMPLE_CSV;
+    render(buildItems(text));
+  } catch (e) {
+    document.getElementById("app").innerHTML =
+      '<p class="message">リンクを読み込めませんでした。時間をおいて、ページを再読み込みしてください。</p>';
+  }
+}
+load();
+</script>
+</body>
+</html>
